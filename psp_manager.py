@@ -164,18 +164,40 @@ class PSPManager:
         if df.empty:
             return
 
+        # Agrupar por tipo de actividad y sumar los tiempos
+        grouped_df = df.groupby('name').agg({
+            'duration': 'sum',
+            'pause_time': 'sum'
+        }).reset_index()
+
         fig, ax = plt.subplots(figsize=(12, 6))
         
-        x = range(len(df))
+        x = range(len(grouped_df))
         width = 0.35
 
-        ax.bar([i - width/2 for i in x], df['duration'], width, label='Activity Time', color='blue')
-        ax.bar([i + width/2 for i in x], df['pause_time'], width, label='Pause Time', color='red')
+        # Crear las barras agrupadas
+        ax.bar([i - width/2 for i in x], grouped_df['duration'], width, 
+               label='Tiempo Total de Actividad', color='blue')
+        ax.bar([i + width/2 for i in x], grouped_df['pause_time'], width, 
+               label='Tiempo Total de Pausa', color='red')
 
-        plt.title(f'Time Distribution - {project_name}')
-        plt.xlabel('Activities')
-        plt.ylabel('Time (minutes)')
-        plt.xticks(x, df['name'], rotation=45)
+        # Añadir etiquetas con los valores totales
+        for i in x:
+            # Etiqueta para tiempo de actividad
+            ax.text(i - width/2, grouped_df['duration'].iloc[i], 
+                   f'{grouped_df["duration"].iloc[i]:.1f}m', 
+                   ha='center', va='bottom')
+            # Etiqueta para tiempo de pausa
+            ax.text(i + width/2, grouped_df['pause_time'].iloc[i], 
+                   f'{grouped_df["pause_time"].iloc[i]:.1f}m', 
+                   ha='center', va='bottom')
+
+        plt.title(f'Distribución de Tiempos por Tipo de Actividad - {project_name}')
+        plt.xlabel('Tipos de Actividades')
+        plt.ylabel('Tiempo Total (minutos)')
+        plt.xticks(x, grouped_df['name'], rotation=45)
         plt.legend()
         plt.tight_layout()
         plt.show()
+        
+        return fig
