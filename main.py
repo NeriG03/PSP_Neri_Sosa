@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import winsound
+import threading
 
 from matplotlib import pyplot as plt
 from psp_manager import PSPManager
@@ -82,6 +84,8 @@ class PSPGUI:
         self.last_graph = None
         self.pause_timer_id = None
         self.is_paused = False
+        self.alarm_thread = None
+        self.should_alarm = False
 
     def setup_gui(self):
         # Project Frame
@@ -221,6 +225,23 @@ class PSPGUI:
             self.pause_timer_label.config(text=f"Pause: {minutes}:{seconds:02d}")
             self.pause_timer_id = self.root.after(1000, self.update_pause_timer)
 
+    def play_alarm(self):
+        while self.should_alarm:
+            winsound.Beep(1000, 500)  # Frecuencia 1000Hz, duración 500ms
+            self.root.after(100)  # Pequeña pausa entre beeps
+
+    def check_one_minute(self):
+        if self.psp.current_activity and not self.is_paused:
+            elapsed = self.psp.get_elapsed_time()
+            if elapsed >= 1:  # 1 minuto
+                if not self.should_alarm:
+                    self.should_alarm = True
+                    messagebox.showwarning("Alerta", "¡Ha pasado 1 minuto!")
+                    self.alarm_thread = threading.Thread(target=self.play_alarm, daemon=True)
+                    self.alarm_thread.start()
+        if self.timer_id:  # Seguir verificando mientras la actividad esté activa
+            self.root.after(1000, self.check_one_minute)
+
     def start_activity(self):
         if not self.psp.current_project:
             messagebox.showerror("Error", "Please select a project first")
@@ -231,6 +252,8 @@ class PSPGUI:
             self.psp.start_activity(activity, comment)
             self.update_button_states(working=True)
             self.update_timer()
+            self.should_alarm = False
+            self.root.after(1000, self.check_one_minute)
 
     def stop_activity(self):
         if self.timer_id:
@@ -240,6 +263,9 @@ class PSPGUI:
         self.is_paused = True
         self.update_button_states(paused=True)
         self.update_pause_timer()
+        self.should_alarm = False
+        if self.alarm_thread:
+            self.alarm_thread = None
 
     def resume_from_pause(self):
         if self.psp.resume_from_pause():
@@ -271,6 +297,9 @@ class PSPGUI:
             self.resume_button.config(state="normal")
 
     def finish_activity(self):
+        self.should_alarm = False
+        if self.alarm_thread:
+            self.alarm_thread = None
         if self.pause_timer_id:
             self.root.after_cancel(self.pause_timer_id)
             self.pause_timer_id = None
@@ -324,6 +353,7 @@ class PSPGUI:
     def run(self):
         # Cleanup timer on window close
         def on_closing():
+            self.should_alarm = False
             if self.timer_id:
                 self.root.after_cancel(self.timer_id)
             if self.pause_timer_id:
